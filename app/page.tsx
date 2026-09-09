@@ -1,417 +1,262 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
-import { CheckCircle2, Circle, Heart, TrendingUp } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
-import { Button } from './ui/Button';
-import { Habit, Relationship, Task } from '@/lib/db';
-import { getAllHabits, incrementHabitStreak, getAllRelationships, getTodaysBigRocks } from '@/lib/db';
-import { QuoteCard } from './features/QuoteCard';
-import { TaskCard } from './features/TaskCard';
-import { ThemeToggle } from './features/ThemeToggle';
+import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '@/hooks/use-theme';
+import { db, Task, Habit, Relationship, initializeDB } from '@/lib/db';
+import { ThemeToggle } from '@/components/features/ThemeToggle';
+import { QuoteCard } from '@/components/features/QuoteCard';
+import { TaskCard } from '@/components/features/TaskCard';
+import { MobileNavigation } from '@/components/features/MobileNavigation';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { CheckCircle, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
 export default function Home() {
-  const { theme } = useTheme();
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
   const [relationships, setRelationships] = useState<Relationship[]>([]);
-  const [bigRocks, setBigRocks] = useState<Task[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('home');
+  const { theme } = useTheme();
 
   useEffect(() => {
     async function loadData() {
-      try {
-        const [habitsData, relationshipsData, bigRocksData] = await Promise.all([
-          getAllHabits(),
-          getAllRelationships(),
-          getTodaysBigRocks()
-        ]);
-        
-        setHabits(habitsData);
-        setRelationships(relationshipsData);
-        setBigRocks(bigRocksData);
-      } catch (error) {
-        console.error('Error loading data:', error);
-      } finally {
-        setIsLoading(false);
-      }
+      await initializeDB();
+      
+      const [loadedTasks, loadedHabits, loadedRelationships] = await Promise.all([
+        db.tasks.toArray(),
+        db.habits.toArray(),
+        db.relationships.toArray(),
+      ]);
+      
+      setTasks(loadedTasks);
+      setHabits(loadedHabits);
+      setRelationships(loadedRelationships);
     }
-
     loadData();
   }, []);
 
-  const handleCompleteHabit = async (habitId: number) => {
-    await incrementHabitStreak(habitId);
-    setHabits(prev => 
-      prev.map(h => 
-        h.id === habitId ? { ...h, streak: h.streak + 1 } : h
-      )
-    );
+  const bigRocks = tasks.filter(t => t.isBigRock && t.quadrant === 2);
+
+  const getBalanceIcon = (balance: number) => {
+    if (balance > 100) return <TrendingUp className="text-green-500" size={20} />;
+    if (balance < 100) return <TrendingDown className="text-red-500" size={20} />;
+    return <Minus className="text-gray-400" size={20} />;
   };
 
-  const handleStartPomodoro = (taskId: number) => {
-    // Placeholder for Pomodoro functionality
-    alert(`Iniciando sessão de foco para a tarefa #${taskId}\n\nTempo: 25 minutos`);
-  };
-
-  // Classic Estate Theme Layout
-  if (theme === 'classic') {
-    return (
-      <div className="min-h-screen bg-stone-50 dark:bg-slate-900 transition-colors duration-300">
-        {/* Header */}
-        <header className="border-b border-stone-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm">
-          <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-serif font-bold text-stone-800 dark:text-stone-100">
-                LegacyOS
-              </h1>
-              <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
-                Sistema Pessoal de Eficácia
-              </p>
-            </div>
-            <ThemeToggle />
-          </div>
-        </header>
-
-        {/* Main Content */}
-        <main className="max-w-7xl mx-auto px-6 py-8 space-y-8">
-          {/* Hero - Quote Card */}
-          <section aria-label="Citação do Dia">
-            <QuoteCard theme="classic" />
-          </section>
-
-          {/* Main Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Left Column - Big Rocks */}
-            <section aria-label="Pedras Grandes de Hoje">
-              <Card theme="classic" variant="elevated">
-                <CardHeader theme="classic">
-                  <CardTitle theme="classic" as="h2" className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-amber-600" />
-                    Pedras Grandes de Hoje
-                  </CardTitle>
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'home':
+        return (
+          <>
+            <QuoteCard />
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-24">
+              {/* Pedras Grandes */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Pedras Grandes de Hoje</CardTitle>
                 </CardHeader>
-                <CardContent theme="classic" className="space-y-4">
-                  {isLoading ? (
-                    <p className="text-sm text-stone-500">Carregando tarefas...</p>
-                  ) : bigRocks.length > 0 ? (
-                    bigRocks.map(task => (
-                      <TaskCard
-                        key={task.id}
-                        task={task}
-                        theme="classic"
-                        onStartPomodoro={handleStartPomodoro}
-                      />
+                <CardContent>
+                  {bigRocks.length > 0 ? (
+                    bigRocks.map((task) => (
+                      <TaskCard key={task.id} title={task.title} isBigRock={true} />
                     ))
                   ) : (
-                    <div className="text-center py-8">
-                      <p className="text-stone-500 italic">
-                        Nenhuma pedra grande definida para hoje.
-                      </p>
-                      <p className="text-xs text-stone-400 mt-2">
-                        "O que é importante raramente é urgente." — Covey
-                      </p>
-                    </div>
+                    <p className="text-gray-500 text-sm">Nenhuma pedra grande definida para hoje.</p>
                   )}
                 </CardContent>
               </Card>
-            </section>
 
-            {/* Right Column - Renewal Tracker */}
-            <section aria-label="Tracker de Renovação">
-              <Card theme="classic" variant="elevated">
-                <CardHeader theme="classic">
-                  <CardTitle theme="classic" as="h2" className="flex items-center gap-2">
-                    <CheckCircle2 className="w-5 h-5 text-green-700" />
-                    Tracker de Renovação
-                  </CardTitle>
+              {/* Tracker de Renovação */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Tracker de Renovação</CardTitle>
                 </CardHeader>
-                <CardContent theme="classic" className="space-y-3">
-                  {isLoading ? (
-                    <p className="text-sm text-stone-500">Carregando hábitos...</p>
-                  ) : habits.length > 0 ? (
-                    habits.map(habit => (
-                      <motion.button
+                <CardContent>
+                  <div className="space-y-3">
+                    {habits.map((habit) => (
+                      <motion.div
                         key={habit.id}
-                        onClick={() => handleCompleteHabit(habit.id)}
+                        className="flex items-center justify-between p-3 rounded-lg classic:bg-stone-50 neon:bg-white/5"
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
-                        className="w-full flex items-center justify-between p-3 rounded-lg border border-stone-200 dark:border-slate-700 hover:bg-stone-50 dark:hover:bg-slate-800 transition-colors"
                       >
                         <div className="flex items-center gap-3">
-                          <Circle className="w-5 h-5 text-green-700" />
-                          <div className="text-left">
-                            <p className="font-medium text-stone-800 dark:text-stone-100">
+                          <CheckCircle 
+                            size={20} 
+                            className="classic:text-amber-600 neon:text-cyan-400" 
+                          />
+                          <div>
+                            <p className="font-medium classic:text-stone-800 neon:text-white">
                               {habit.name}
                             </p>
-                            <p className="text-xs text-stone-500">{habit.dimension}</p>
+                            <p className="text-xs classic:text-stone-500 neon:text-gray-400">
+                              {habit.dimension}
+                            </p>
                           </div>
                         </div>
-                        <span className="text-sm font-mono text-amber-700 dark:text-amber-500">
+                        <span className="text-xs font-mono classic:text-amber-600 neon:text-cyan-400">
                           {habit.streak} dias
                         </span>
-                      </motion.button>
-                    ))
-                  ) : (
-                    <p className="text-sm text-stone-500">Nenhum hábito cadastrado.</p>
-                  )}
+                      </motion.div>
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
-            </section>
-          </div>
+            </div>
 
-          {/* Bottom Section - Emotional Bank Account */}
-          <section aria-label="Conta Bancária Emocional">
-            <Card theme="classic">
-              <CardHeader theme="classic">
-                <CardTitle theme="classic" as="h2" className="flex items-center gap-2">
-                  <Heart className="w-5 h-5 text-red-700" />
-                  Conta Bancária Emocional
-                </CardTitle>
+            {/* Conta Bancária Emocional */}
+            <Card className="mb-24">
+              <CardHeader>
+                <CardTitle>Conta Bancária Emocional</CardTitle>
               </CardHeader>
-              <CardContent theme="classic">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {isLoading ? (
-                    <p className="text-sm text-stone-500">Carregando relacionamentos...</p>
-                  ) : relationships.length > 0 ? (
-                    relationships.map(rel => (
-                      <div
-                        key={rel.id}
-                        className="p-4 rounded-lg bg-stone-50 dark:bg-slate-800 border border-stone-200 dark:border-slate-700"
-                      >
-                        <p className="font-medium text-stone-800 dark:text-stone-100 mb-2">
+              <CardContent>
+                <div className="space-y-3">
+                  {relationships.map((rel) => (
+                    <motion.div
+                      key={rel.id}
+                      className="flex items-center justify-between p-4 rounded-lg classic:border classic:border-stone-200 neon:border neon:border-white/10"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                    >
+                      <div className="flex items-center gap-3">
+                        {getBalanceIcon(rel.emotionalBankBalance)}
+                        <span className="font-medium classic:text-stone-800 neon:text-white">
+                          {rel.name}
+                        </span>
+                      </div>
+                      <span className={`font-mono text-sm ${
+                        rel.emotionalBankBalance > 100 
+                          ? 'text-green-500' 
+                          : rel.emotionalBankBalance < 100 
+                          ? 'text-red-500' 
+                          : 'text-gray-400'
+                      }`}>
+                        {rel.emotionalBankBalance} pts
+                      </span>
+                    </motion.div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </>
+        );
+
+      case 'rocks':
+        return (
+          <div className="mb-24">
+            <h2 className="text-2xl font-bold mb-6 classic:font-serif neon:font-grotesk classic:text-stone-800 neon:text-white">
+              Todas as Tarefas
+            </h2>
+            {tasks.map((task) => (
+              <TaskCard 
+                key={task.id} 
+                title={task.title} 
+                isBigRock={task.isBigRock}
+                quadrant={task.quadrant}
+              />
+            ))}
+          </div>
+        );
+
+      case 'habits':
+        return (
+          <div className="mb-24">
+            <h2 className="text-2xl font-bold mb-6 classic:font-serif neon:font-grotesk classic:text-stone-800 neon:text-white">
+              Hábitos de Renovação
+            </h2>
+            <Card>
+              <CardContent className="pt-6">
+                <div className="space-y-4">
+                  {habits.map((habit) => (
+                    <div key={habit.id} className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium classic:text-stone-800 neon:text-white">
+                          {habit.name}
+                        </p>
+                        <p className="text-sm classic:text-stone-500 neon:text-gray-400">
+                          {habit.dimension}
+                        </p>
+                      </div>
+                      <Button variant="outline" size="sm">
+                        Completar
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        );
+
+      case 'people':
+        return (
+          <div className="mb-24">
+            <h2 className="text-2xl font-bold mb-6 classic:font-serif neon:font-grotesk classic:text-stone-800 neon:text-white">
+              Relacionamentos
+            </h2>
+            <Card>
+              <CardContent className="pt-6">
+                <div className="space-y-4">
+                  {relationships.map((rel) => (
+                    <div key={rel.id} className="flex items-center justify-between p-4 rounded-lg classic:bg-stone-50 neon:bg-white/5">
+                      <div>
+                        <p className="font-medium classic:text-stone-800 neon:text-white">
                           {rel.name}
                         </p>
-                        <div className="flex items-center gap-2">
-                          <TrendingUp 
-                            className={`w-4 h-4 ${
-                              rel.emotionalBankBalance >= 100 
-                                ? 'text-green-700' 
-                                : rel.emotionalBankBalance >= 50 
-                                  ? 'text-amber-700' 
-                                  : 'text-red-700'
-                            }`} 
-                          />
-                          <span 
-                            className={`font-mono text-lg font-bold ${
-                              rel.emotionalBankBalance >= 100 
-                                ? 'text-green-700' 
-                                : rel.emotionalBankBalance >= 50 
-                                  ? 'text-amber-700' 
-                                  : 'text-red-700'
-                            }`}
-                          >
-                            {rel.emotionalBankBalance}
-                          </span>
-                        </div>
+                        <p className="text-sm classic:text-stone-500 neon:text-gray-400">
+                          Saldo emocional
+                        </p>
                       </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-stone-500">Nenhum relacionamento cadastrado.</p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </section>
-        </main>
-      </div>
-    );
-  }
-
-  // Neon Forge Theme Layout
-  if (theme === 'neon') {
-    return (
-      <div className="min-h-screen bg-[#09090B] transition-colors duration-150">
-        {/* Header */}
-        <header className="border-b border-white/10 bg-white/5 backdrop-blur-md sticky top-0 z-50">
-          <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-space-grotesk font-bold text-gradient-neon">
-                LegacyOS
-              </h1>
-              <p className="text-xs font-mono text-cyan-400 mt-1">
-                // SISTEMA_PESSOAL_DE_EFICÁCIA
-              </p>
-            </div>
-            <ThemeToggle />
-          </div>
-        </header>
-
-        {/* Main Content */}
-        <main className="max-w-7xl mx-auto px-6 py-8 space-y-8">
-          {/* Hero - Quote Card */}
-          <section aria-label="Citação_do_Dia">
-            <QuoteCard theme="neon" />
-          </section>
-
-          {/* Main Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Left Column - Big Rocks */}
-            <section aria-label="Pedras_Grandes_de_Hoje">
-              <Card theme="neon" variant="bordered">
-                <CardHeader theme="neon">
-                  <CardTitle theme="neon" as="h2" className="flex items-center gap-2 text-white">
-                    <motion.span
-                      animate={{ rotate: [0, 360] }}
-                      transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
-                    >
-                      ⬡
-                    </motion.span>
-                    PEDRAS_GRANDES_DE_HOJE
-                  </CardTitle>
-                </CardHeader>
-                <CardContent theme="neon" className="space-y-3">
-                  {isLoading ? (
-                    <p className="text-sm font-mono text-gray-400">[CARREGANDO_TAREFAS...]</p>
-                  ) : bigRocks.length > 0 ? (
-                    bigRocks.map(task => (
-                      <TaskCard
-                        key={task.id}
-                        task={task}
-                        theme="neon"
-                        onStartPomodoro={handleStartPomodoro}
-                      />
-                    ))
-                  ) : (
-                    <div className="text-center py-8">
-                      <p className="text-gray-400 font-mono text-sm">
-                        [NENHUMA_PEDRA_GRANDE_DEFINIDA]
-                      </p>
-                      <p className="text-xs text-cyan-400/70 font-mono mt-2">
-                        // "O_que_é_importante_raramente_é_urgente."
-                      </p>
+                      <div className="flex items-center gap-2">
+                        {getBalanceIcon(rel.emotionalBankBalance)}
+                        <span className="font-mono classic:text-stone-800 neon:text-white">
+                          {rel.emotionalBankBalance}
+                        </span>
+                      </div>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
-            </section>
-
-            {/* Right Column - Renewal Tracker */}
-            <section aria-label="Tracker_de_Renovação">
-              <Card theme="neon" variant="elevated">
-                <CardHeader theme="neon">
-                  <CardTitle theme="neon" as="h2" className="flex items-center gap-2 text-white">
-                    <motion.div
-                      animate={{ scale: [1, 1.2, 1] }}
-                      transition={{ duration: 2, repeat: Infinity }}
-                    >
-                      <CheckCircle2 className="w-5 h-5 text-green-400" />
-                    </motion.div>
-                    TRACKER_DE_RENOVAÇÃO
-                  </CardTitle>
-                </CardHeader>
-                <CardContent theme="neon" className="space-y-3">
-                  {isLoading ? (
-                    <p className="text-sm font-mono text-gray-400">[CARREGANDO_HÁBITOS...]</p>
-                  ) : habits.length > 0 ? (
-                    habits.map((habit, index) => (
-                      <motion.button
-                        key={habit.id}
-                        onClick={() => handleCompleteHabit(habit.id)}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: index * 0.1 }}
-                        whileHover={{ 
-                          scale: 1.02,
-                          boxShadow: '0 0 15px rgba(16,185,129,0.5)'
-                        }}
-                        whileTap={{ scale: 0.98 }}
-                        className="w-full flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/10 hover:border-green-400/70 transition-all group"
-                      >
-                        <div className="flex items-center gap-3">
-                          <motion.div
-                            whileTap={{ scale: 1.3 }}
-                          >
-                            <Circle className="w-5 h-5 text-green-400 group-hover:fill-green-400/30 transition-colors" />
-                          </motion.div>
-                          <div className="text-left">
-                            <p className="font-medium text-white">{habit.name}</p>
-                            <p className="text-xs font-mono text-fuchsia-400">{habit.dimension.toUpperCase()}</p>
-                          </div>
-                        </div>
-                        <motion.span 
-                          className="font-mono text-lg text-cyan-400"
-                          whileTap={{ scale: 1.2, color: '#10B981' }}
-                        >
-                          STREAK: {habit.streak}
-                        </motion.span>
-                      </motion.button>
-                    ))
-                  ) : (
-                    <p className="text-sm font-mono text-gray-400">[NENHUM_HÁBITO_CADASTRADO]</p>
-                  )}
-                </CardContent>
-              </Card>
-            </section>
-          </div>
-
-          {/* Bottom Section - Emotional Bank Account */}
-          <section aria-label="Conta_Bancária_Emocional">
-            <Card theme="neon">
-              <CardHeader theme="neon">
-                <CardTitle theme="neon" as="h2" className="flex items-center gap-2 text-white">
-                  <Heart className="w-5 h-5 text-fuchsia-400" />
-                  CONTA_BANCÁRIA_EMOCIONAL
-                </CardTitle>
-              </CardHeader>
-              <CardContent theme="neon">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {isLoading ? (
-                    <p className="text-sm font-mono text-gray-400">[CARREGANDO_RELACIONAMENTOS...]</p>
-                  ) : relationships.length > 0 ? (
-                    relationships.map((rel, index) => (
-                      <motion.div
-                        key={rel.id}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.1 }}
-                        className="p-4 rounded-lg bg-white/5 border border-white/10 hover:border-fuchsia-400/50 transition-all group"
-                      >
-                        <p className="font-medium text-white mb-2">{rel.name}</p>
-                        <div className="flex items-center gap-2">
-                          <TrendingUp 
-                            className={`w-4 h-4 ${
-                              rel.emotionalBankBalance >= 100 
-                                ? 'text-green-400' 
-                                : rel.emotionalBankBalance >= 50 
-                                  ? 'text-cyan-400' 
-                                  : 'text-fuchsia-400'
-                            }`} 
-                          />
-                          <motion.span 
-                            className={`font-mono text-2xl font-bold ${
-                              rel.emotionalBankBalance >= 100 
-                                ? 'text-green-400' 
-                                : rel.emotionalBankBalance >= 50 
-                                  ? 'text-cyan-400' 
-                                  : 'text-fuchsia-400'
-                            }`}
-                            animate={{ 
-                              textShadow: [
-                                '0 0 5px currentColor',
-                                '0 0 15px currentColor',
-                                '0 0 5px currentColor'
-                              ]
-                            }}
-                            transition={{ duration: 2, repeat: Infinity }}
-                          >
-                            {rel.emotionalBankBalance}
-                          </motion.span>
-                        </div>
-                      </motion.div>
-                    ))
-                  ) : (
-                    <p className="text-sm font-mono text-gray-400">[NENHUM_RELACIONAMENTO_CADASTRADO]</p>
-                  )}
+                  ))}
                 </div>
               </CardContent>
             </Card>
-          </section>
-        </main>
-      </div>
-    );
-  }
+          </div>
+        );
 
-  return null;
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <main className="min-h-screen pb-24">
+      {/* Header Fixo */}
+      <header className="sticky top-0 z-40 backdrop-blur-md classic:bg-[#FDFBF7]/90 neon:bg-[#09090B]/90 border-b classic:border-stone-200 neon:border-white/10">
+        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+          <h1 className="text-xl font-bold classic:font-serif classic:text-stone-800 neon:font-grotesk neon:text-white">
+            LegacyOS
+          </h1>
+          <ThemeToggle />
+        </div>
+      </header>
+
+      {/* Conteúdo Principal */}
+      <div className="container mx-auto px-4 py-6">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+          >
+            {renderContent()}
+          </motion.div>
+        </AnimatePresence>
+      </div>
+
+      {/* Navegação Mobile */}
+      <MobileNavigation activeTab={activeTab} setActiveTab={setActiveTab} />
+    </main>
+  );
 }

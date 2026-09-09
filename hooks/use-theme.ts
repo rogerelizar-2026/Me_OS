@@ -1,46 +1,31 @@
-'use client';
-
 import { useState, useEffect } from 'react';
 
-export type Theme = 'classic' | 'neon';
+type Theme = 'classic' | 'neon';
 
-interface UseThemeReturn {
-  theme: Theme;
-  setTheme: (theme: Theme) => void;
-  toggleTheme: () => void;
-}
+export function useTheme() {
+  const [theme, setTheme] = useState<Theme>('classic');
+  const [mounted, setMounted] = useState(false);
 
-/**
- * Custom hook to manage theme switching between Classic Estate and Neon Forge.
- * Persists theme preference in localStorage and applies CSS class to <html> element.
- */
-export function useTheme(): UseThemeReturn {
-  const [theme, setThemeState] = useState<Theme>('classic');
-  const [isLoaded, setIsLoaded] = useState(false);
-
-  // Load theme from localStorage on mount (client-side only)
   useEffect(() => {
-    const storedTheme = localStorage.getItem('legacyos-theme') as Theme | null;
-    const initialTheme = storedTheme || 'classic';
-    
-    setThemeState(initialTheme);
-    document.documentElement.classList.remove('classic', 'neon');
-    document.documentElement.classList.add(initialTheme);
-    setIsLoaded(true);
+    setMounted(true);
+    const savedTheme = localStorage.getItem('legacyos-theme') as Theme;
+    if (savedTheme) {
+      setTheme(savedTheme);
+      document.documentElement.classList.remove('classic', 'neon');
+      document.documentElement.classList.add(savedTheme);
+    } else {
+      document.documentElement.classList.add('classic');
+    }
   }, []);
 
-  const setTheme = (newTheme: Theme) => {
-    setThemeState(newTheme);
+  const toggleTheme = () => {
+    const newTheme = theme === 'classic' ? 'neon' : 'classic';
+    setTheme(newTheme);
     localStorage.setItem('legacyos-theme', newTheme);
     
-    // Apply theme class to html element
     document.documentElement.classList.remove('classic', 'neon');
     document.documentElement.classList.add(newTheme);
   };
 
-  const toggleTheme = () => {
-    setTheme(theme === 'classic' ? 'neon' : 'classic');
-  };
-
-  return { theme, setTheme, toggleTheme, isLoaded };
+  return { theme, toggleTheme, mounted };
 }
