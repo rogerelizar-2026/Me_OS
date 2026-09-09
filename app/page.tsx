@@ -1,271 +1,223 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle2, Circle, Heart, TrendingUp, Target, Sparkles, Users } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
-import { Habit, Relationship, Task } from '@/lib/db';
-import { getAllHabits, incrementHabitStreak, getAllRelationships, getTodaysBigRocks } from '@/lib/db';
-import { QuoteCard } from './features/QuoteCard';
-import { TaskCard } from './features/TaskCard';
-import { ThemeToggle } from './features/ThemeToggle';
-import { MobileNavigation } from './features/MobileNavigation';
 import { useTheme } from '@/hooks/use-theme';
-
-type TabType = 'home' | 'rocks' | 'habits' | 'relationships';
+import { db, Task, Habit, Relationship, initializeDB } from '@/lib/db';
+import { ThemeToggle } from '@/components/features/ThemeToggle';
+import { QuoteCard } from '@/components/features/QuoteCard';
+import { TaskCard } from '@/components/features/TaskCard';
+import { MobileNavigation } from '@/components/features/MobileNavigation';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { CheckCircle, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
 export default function Home() {
-  const { theme } = useTheme();
-  const [activeTab, setActiveTab] = useState<TabType>('home');
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
   const [relationships, setRelationships] = useState<Relationship[]>([]);
-  const [bigRocks, setBigRocks] = useState<Task[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  
+  const [activeTab, setActiveTab] = useState('home');
+  const { theme } = useTheme();
+
   useEffect(() => {
     async function loadData() {
-      try {
-        const [habitsData, relationshipsData, bigRocksData] = await Promise.all([
-          getAllHabits(),
-          getAllRelationships(),
-          getTodaysBigRocks()
-        ]);
-        setHabits(habitsData);
-        setRelationships(relationshipsData);
-        setBigRocks(bigRocksData);
-      } catch (error) {
-        console.error('Error loading data:', error);
-      } finally {
-        setIsLoading(false);
-      }
+      await initializeDB();
+      
+      const [loadedTasks, loadedHabits, loadedRelationships] = await Promise.all([
+        db.tasks.toArray(),
+        db.habits.toArray(),
+        db.relationships.toArray(),
+      ]);
+      
+      setTasks(loadedTasks);
+      setHabits(loadedHabits);
+      setRelationships(loadedRelationships);
     }
     loadData();
   }, []);
 
-  const handleCompleteHabit = async (habitId: number) => {
-    await incrementHabitStreak(habitId);
-    setHabits(prev => prev.map(h => h.id === habitId ? { ...h, streak: h.streak + 1 } : h));
+  const bigRocks = tasks.filter(t => t.isBigRock && t.quadrant === 2);
+
+  const getBalanceIcon = (balance: number) => {
+    if (balance > 100) return <TrendingUp className="text-green-500" size={20} />;
+    if (balance < 100) return <TrendingDown className="text-red-500" size={20} />;
+    return <Minus className="text-gray-400" size={20} />;
   };
 
-  const handleStartPomodoro = (taskId: number) => {
-    alert(`Iniciando sessão de foco para a tarefa #${taskId}\n\nTempo: 25 minutos`);
-  };
-
-  const isClassic = theme === 'classic';
-
-  const renderTabContent = () => {
+  const renderContent = () => {
     switch (activeTab) {
       case 'home':
         return (
-          <div className="space-y-4">
-            <QuoteCard theme={theme} />
+          <>
+            <QuoteCard />
             
-            <section aria-label="Pedras Grandes">
-              <Card theme={theme} variant={isClassic ? 'elevated' : 'bordered'}>
-                <CardHeader theme={theme} className="py-3">
-                  <CardTitle theme={theme} as="h2" className="flex items-center gap-2 text-sm">
-                    <span className={`w-2 h-2 rounded-full ${isClassic ? 'bg-amber-600' : 'bg-cyan-400'}`} />
-                    {isClassic ? 'Pedras Grandes de Hoje' : 'PEDRAS_GRANDES'}
-                  </CardTitle>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-24">
+              {/* Pedras Grandes */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Pedras Grandes de Hoje</CardTitle>
                 </CardHeader>
-                <CardContent theme={theme} className="py-3">
-                  {isLoading ? (
-                    <p className={`text-xs ${isClassic ? 'text-stone-500' : 'text-gray-400 font-mono'}`}>Carregando...</p>
-                  ) : bigRocks.length > 0 ? (
-                    <div className="space-y-2">
-                      {bigRocks.map(task => (
-                        <TaskCard key={task.id} task={task} theme={theme} onStartPomodoro={handleStartPomodoro} />
-                      ))}
-                    </div>
+                <CardContent>
+                  {bigRocks.length > 0 ? (
+                    bigRocks.map((task) => (
+                      <TaskCard key={task.id} title={task.title} isBigRock={true} />
+                    ))
                   ) : (
-                    <div className="text-center py-6">
-                      <Target className={`w-8 h-8 mx-auto mb-2 ${isClassic ? 'text-stone-300' : 'text-gray-600'}`} />
-                      <p className={`text-xs ${isClassic ? 'text-stone-500 italic' : 'text-gray-400 font-mono'}`}>
-                        {isClassic ? 'Nenhuma pedra grande definida.' : '[NENHUMA_PEDRA]'}
-                      </p>
-                    </div>
+                    <p className="text-gray-500 text-sm">Nenhuma pedra grande definida para hoje.</p>
                   )}
                 </CardContent>
               </Card>
-            </section>
 
-            <section aria-label="Tracker de Renovação">
-              <Card theme={theme} variant="elevated">
-                <CardHeader theme={theme} className="py-3">
-                  <CardTitle theme={theme} as="h2" className="flex items-center gap-2 text-sm">
-                    <CheckCircle2 className={`w-4 h-4 ${isClassic ? 'text-green-700' : 'text-green-400'}`} />
-                    {isClassic ? 'Tracker de Renovação' : 'TRACKER_DE_RENOVAÇÃO'}
-                  </CardTitle>
+              {/* Tracker de Renovação */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Tracker de Renovação</CardTitle>
                 </CardHeader>
-                <CardContent theme={theme} className="py-3">
-                  {isLoading ? (
-                    <p className={`text-xs ${isClassic ? 'text-stone-500' : 'text-gray-400 font-mono'}`}>Carregando...</p>
-                  ) : habits.length > 0 ? (
-                    <div className="space-y-2">
-                      {habits.map((habit, index) => (
-                        <motion.button
-                          key={habit.id}
-                          onClick={() => handleCompleteHabit(habit.id)}
-                          initial={{ opacity: 0, x: -10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: index * 0.05 }}
-                          whileTap={{ scale: 0.98 }}
-                          className={`w-full flex items-center justify-between p-3 rounded-lg transition-all ${
-                            isClassic
-                              ? 'border border-stone-200 hover:bg-stone-50'
-                              : 'bg-white/5 border border-white/10 hover:border-green-400/70'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <Circle className={`w-5 h-5 ${isClassic ? 'text-green-700' : 'text-green-400'}`} />
-                            <div className="text-left">
-                              <p className={`font-medium text-sm ${isClassic ? 'text-stone-800 dark:text-stone-100' : 'text-white'}`}>{habit.name}</p>
-                              <p className={`text-[10px] ${isClassic ? 'text-stone-500' : 'text-fuchsia-400 font-mono'}`}>{habit.dimension}</p>
-                            </div>
+                <CardContent>
+                  <div className="space-y-3">
+                    {habits.map((habit) => (
+                      <motion.div
+                        key={habit.id}
+                        className="flex items-center justify-between p-3 rounded-lg classic:bg-stone-50 neon:bg-white/5"
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <div className="flex items-center gap-3">
+                          <CheckCircle 
+                            size={20} 
+                            className="classic:text-amber-600 neon:text-cyan-400" 
+                          />
+                          <div>
+                            <p className="font-medium classic:text-stone-800 neon:text-white">
+                              {habit.name}
+                            </p>
+                            <p className="text-xs classic:text-stone-500 neon:text-gray-400">
+                              {habit.dimension}
+                            </p>
                           </div>
-                          <span className={`text-sm font-mono ${isClassic ? 'text-amber-700' : 'text-cyan-400'}`}>{habit.streak}d</span>
-                        </motion.button>
-                      ))}
-                    </div>
-                  ) : null}
+                        </div>
+                        <span className="text-xs font-mono classic:text-amber-600 neon:text-cyan-400">
+                          {habit.streak} dias
+                        </span>
+                      </motion.div>
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
-            </section>
+            </div>
 
-            <section aria-label="Conta Bancária Emocional">
-              <Card theme={theme}>
-                <CardHeader theme={theme} className="py-3">
-                  <CardTitle theme={theme} as="h2" className="flex items-center gap-2 text-sm">
-                    <Heart className={`w-4 h-4 ${isClassic ? 'text-red-700' : 'text-fuchsia-400'}`} />
-                    {isClassic ? 'Conta Bancária Emocional' : 'CONTA_EMOCIONAL'}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent theme={theme} className="py-3">
-                  {isLoading ? (
-                    <p className={`text-xs ${isClassic ? 'text-stone-500' : 'text-gray-400 font-mono'}`}>Carregando...</p>
-                  ) : relationships.length > 0 ? (
-                    <div className="grid grid-cols-2 gap-3">
-                      {relationships.map(rel => (
-                        <motion.div key={rel.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                          className={`p-3 rounded-lg ${isClassic ? 'bg-stone-50 border border-stone-200' : 'bg-white/5 border border-white/10'}`}
-                        >
-                          <p className={`font-medium text-sm truncate ${isClassic ? 'text-stone-800' : 'text-white'}`}>{rel.name}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <TrendingUp className={`w-4 h-4 ${rel.emotionalBankBalance >= 100 ? 'text-green-700' : rel.emotionalBankBalance >= 50 ? 'text-amber-700' : 'text-red-700'}`} />
-                            <span className={`font-mono text-lg font-bold ${rel.emotionalBankBalance >= 100 ? 'text-green-700' : rel.emotionalBankBalance >= 50 ? 'text-amber-700' : 'text-red-700'}`}>{rel.emotionalBankBalance}</span>
-                          </div>
-                        </motion.div>
-                      ))}
-                    </div>
-                  ) : null}
-                </CardContent>
-              </Card>
-            </section>
-          </div>
+            {/* Conta Bancária Emocional */}
+            <Card className="mb-24">
+              <CardHeader>
+                <CardTitle>Conta Bancária Emocional</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {relationships.map((rel) => (
+                    <motion.div
+                      key={rel.id}
+                      className="flex items-center justify-between p-4 rounded-lg classic:border classic:border-stone-200 neon:border neon:border-white/10"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                    >
+                      <div className="flex items-center gap-3">
+                        {getBalanceIcon(rel.emotionalBankBalance)}
+                        <span className="font-medium classic:text-stone-800 neon:text-white">
+                          {rel.name}
+                        </span>
+                      </div>
+                      <span className={`font-mono text-sm ${
+                        rel.emotionalBankBalance > 100 
+                          ? 'text-green-500' 
+                          : rel.emotionalBankBalance < 100 
+                          ? 'text-red-500' 
+                          : 'text-gray-400'
+                      }`}>
+                        {rel.emotionalBankBalance} pts
+                      </span>
+                    </motion.div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </>
         );
 
       case 'rocks':
         return (
-          <div className="space-y-4">
-            <Card theme={theme} variant={isClassic ? 'elevated' : 'bordered'}>
-              <CardHeader theme={theme} className="py-3">
-                <CardTitle theme={theme} as="h2" className="flex items-center gap-2 text-sm">
-                  <Target className={`w-4 h-4 ${isClassic ? 'text-amber-700' : 'text-cyan-400'}`} />
-                  {isClassic ? 'Todas as Pedras Grandes' : 'TODAS_AS_PEDRAS'}
-                </CardTitle>
-              </CardHeader>
-              <CardContent theme={theme} className="py-3">
-                {isLoading ? (
-                  <p className={`text-xs ${isClassic ? 'text-stone-500' : 'text-gray-400 font-mono'}`}>Carregando...</p>
-                ) : bigRocks.length > 0 ? (
-                  <div className="space-y-2">
-                    {bigRocks.map(task => (
-                      <TaskCard key={task.id} task={task} theme={theme} onStartPomodoro={handleStartPomodoro} />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <Target className={`w-12 h-12 mx-auto mb-3 ${isClassic ? 'text-stone-300' : 'text-gray-600'}`} />
-                    <p className={`text-sm ${isClassic ? 'text-stone-500' : 'text-gray-400 font-mono'}`}>Nenhuma pedra encontrada.</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+          <div className="mb-24">
+            <h2 className="text-2xl font-bold mb-6 classic:font-serif neon:font-grotesk classic:text-stone-800 neon:text-white">
+              Todas as Tarefas
+            </h2>
+            {tasks.map((task) => (
+              <TaskCard 
+                key={task.id} 
+                title={task.title} 
+                isBigRock={task.isBigRock}
+                quadrant={task.quadrant}
+              />
+            ))}
           </div>
         );
 
       case 'habits':
         return (
-          <div className="space-y-4">
-            <Card theme={theme} variant={isClassic ? 'elevated' : 'bordered'}>
-              <CardHeader theme={theme} className="py-3">
-                <CardTitle theme={theme} as="h2" className="flex items-center gap-2 text-sm">
-                  <Sparkles className={`w-4 h-4 ${isClassic ? 'text-green-700' : 'text-fuchsia-400'}`} />
-                  {isClassic ? 'Todos os Hábitos' : 'TODOS_OS_HÁBITOS'}
-                </CardTitle>
-              </CardHeader>
-              <CardContent theme={theme} className="py-3">
-                {isLoading ? (
-                  <p className={`text-xs ${isClassic ? 'text-stone-500' : 'text-gray-400 font-mono'}`}>Carregando...</p>
-                ) : habits.length > 0 ? (
-                  <div className="space-y-2">
-                    {habits.map((habit, index) => (
-                      <motion.button
-                        key={habit.id}
-                        onClick={() => handleCompleteHabit(habit.id)}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: index * 0.05 }}
-                        whileTap={{ scale: 0.98 }}
-                        className={`w-full flex items-center justify-between p-4 rounded-lg transition-all ${
-                          isClassic ? 'border border-stone-200 hover:bg-stone-50' : 'bg-white/5 border border-white/10 hover:border-green-400/70'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <Circle className={`w-6 h-6 ${isClassic ? 'text-green-700' : 'text-green-400'}`} />
-                          <div className="text-left">
-                            <p className={`font-medium ${isClassic ? 'text-stone-800' : 'text-white'}`}>{habit.name}</p>
-                            <p className={`text-xs ${isClassic ? 'text-stone-500' : 'text-fuchsia-400 font-mono'}`}>{habit.dimension}</p>
-                          </div>
-                        </div>
-                        <span className={`text-lg font-mono ${isClassic ? 'text-amber-700' : 'text-cyan-400'}`}>{habit.streak}d</span>
-                      </motion.button>
-                    ))}
-                  </div>
-                ) : null}
+          <div className="mb-24">
+            <h2 className="text-2xl font-bold mb-6 classic:font-serif neon:font-grotesk classic:text-stone-800 neon:text-white">
+              Hábitos de Renovação
+            </h2>
+            <Card>
+              <CardContent className="pt-6">
+                <div className="space-y-4">
+                  {habits.map((habit) => (
+                    <div key={habit.id} className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium classic:text-stone-800 neon:text-white">
+                          {habit.name}
+                        </p>
+                        <p className="text-sm classic:text-stone-500 neon:text-gray-400">
+                          {habit.dimension}
+                        </p>
+                      </div>
+                      <Button variant="outline" size="sm">
+                        Completar
+                      </Button>
+                    </div>
+                  ))}
+                </div>
               </CardContent>
             </Card>
           </div>
         );
 
-      case 'relationships':
+      case 'people':
         return (
-          <div className="space-y-4">
-            <Card theme={theme}>
-              <CardHeader theme={theme} className="py-3">
-                <CardTitle theme={theme} as="h2" className="flex items-center gap-2 text-sm">
-                  <Users className={`w-4 h-4 ${isClassic ? 'text-red-700' : 'text-fuchsia-400'}`} />
-                  {isClassic ? 'Todos os Relacionamentos' : 'RELACIONAMENTOS'}
-                </CardTitle>
-              </CardHeader>
-              <CardContent theme={theme} className="py-3">
-                {isLoading ? (
-                  <p className={`text-xs ${isClassic ? 'text-stone-500' : 'text-gray-400 font-mono'}`}>Carregando...</p>
-                ) : relationships.length > 0 ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {relationships.map(rel => (
-                      <motion.div key={rel.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                        className={`p-4 rounded-lg ${isClassic ? 'bg-stone-50 border border-stone-200' : 'bg-white/5 border border-white/10'}`}
-                      >
-                        <p className={`font-medium text-base mb-2 ${isClassic ? 'text-stone-800' : 'text-white'}`}>{rel.name}</p>
-                        <div className="flex items-center justify-between">
-                          <TrendingUp className={`w-5 h-5 ${rel.emotionalBankBalance >= 100 ? 'text-green-700' : rel.emotionalBankBalance >= 50 ? 'text-amber-700' : 'text-red-700'}`} />
-                          <span className={`font-mono text-2xl font-bold ${rel.emotionalBankBalance >= 100 ? 'text-green-700' : rel.emotionalBankBalance >= 50 ? 'text-amber-700' : 'text-red-700'}`}>{rel.emotionalBankBalance}</span>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </div>
-                ) : null}
+          <div className="mb-24">
+            <h2 className="text-2xl font-bold mb-6 classic:font-serif neon:font-grotesk classic:text-stone-800 neon:text-white">
+              Relacionamentos
+            </h2>
+            <Card>
+              <CardContent className="pt-6">
+                <div className="space-y-4">
+                  {relationships.map((rel) => (
+                    <div key={rel.id} className="flex items-center justify-between p-4 rounded-lg classic:bg-stone-50 neon:bg-white/5">
+                      <div>
+                        <p className="font-medium classic:text-stone-800 neon:text-white">
+                          {rel.name}
+                        </p>
+                        <p className="text-sm classic:text-stone-500 neon:text-gray-400">
+                          Saldo emocional
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {getBalanceIcon(rel.emotionalBankBalance)}
+                        <span className="font-mono classic:text-stone-800 neon:text-white">
+                          {rel.emotionalBankBalance}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -277,32 +229,34 @@ export default function Home() {
   };
 
   return (
-    <div className={`min-h-screen transition-colors duration-300 ${isClassic ? 'bg-stone-50 dark:bg-slate-900' : 'bg-[#09090B]'}`}>
-      <header className={`sticky top-0 z-40 transition-all ${
-        isClassic
-          ? 'border-b border-stone-200 bg-white/95 backdrop-blur-sm shadow-sm'
-          : 'border-b border-white/10 bg-[#09090B]/95 backdrop-blur-md'
-      }`}>
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div>
-            <h1 className={`text-lg font-bold ${isClassic ? 'font-serif text-stone-800' : 'font-space-grotesk text-gradient-neon'}`}>LegacyOS</h1>
-            <p className={`text-[9px] ${isClassic ? 'text-stone-500' : 'font-mono text-cyan-400'}`}>
-              {isClassic ? 'Sistema Pessoal de Eficácia' : '// SISTEMA_PESSOAL'}
-            </p>
-          </div>
+    <main className="min-h-screen pb-24">
+      {/* Header Fixo */}
+      <header className="sticky top-0 z-40 backdrop-blur-md classic:bg-[#FDFBF7]/90 neon:bg-[#09090B]/90 border-b classic:border-stone-200 neon:border-white/10">
+        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+          <h1 className="text-xl font-bold classic:font-serif classic:text-stone-800 neon:font-grotesk neon:text-white">
+            LegacyOS
+          </h1>
           <ThemeToggle />
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-4 pb-24">
+      {/* Conteúdo Principal */}
+      <div className="container mx-auto px-4 py-6">
         <AnimatePresence mode="wait">
-          <motion.div key={activeTab} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.2 }}>
-            {renderTabContent()}
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+          >
+            {renderContent()}
           </motion.div>
         </AnimatePresence>
-      </main>
+      </div>
 
-      <MobileNavigation activeTab={activeTab} onTabChange={setActiveTab} theme={theme} />
-    </div>
+      {/* Navegação Mobile */}
+      <MobileNavigation activeTab={activeTab} setActiveTab={setActiveTab} />
+    </main>
   );
 }

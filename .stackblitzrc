@@ -1,0 +1,6 @@
+{
+  "install": {
+    "include": ["framer-motion", "dexie", "lucide-react", "class-variance-authority", "clsx", "tailwind-merge"]
+  },
+  "start": "npm run dev"
+}
